@@ -1,11 +1,15 @@
 #!/usr/bin/env python
 
 import re
-import trello
-import pprint
 import requests
+import HTMLParser
 
 BUGZILLA_URL = 'http://bugzilla.3xo.eu/show_bug.cgi?id=%(id)s'
+DESCRIPTION_PATTERN = '''
+[Bugzilla #%(bug_id)s](%(url)s)
+
+%(description)s
+'''
 
 try:
     from client import client
@@ -38,9 +42,10 @@ except ImportError:
 #     print board, board.__dict__
 
 board = client.get_board('54e476a396124a3eec92625a')
+parser = HTMLParser.HTMLParser()
 
 for card in board.all_cards():
-    match = re.search('(\d+)', card.name)
+    match = re.search('(\d{4})', card.name)
     if match and 1000 < int(match.group(1)) < 3000:
         bug_id = match.group(1)
         print 'Bug ID: %s' % bug_id
@@ -51,15 +56,30 @@ for card in board.all_cards():
         match = re.search('<title>Bug %s - ([^<]+)</title>' % bug_id,
                           request.text)
         if match:
-            title = match.group(1)
-            new_name = '#%(bug_id)s %(title)s' % locals()
-            print 'setting name from %s to %s' % (card.name, new_name)
+            title = parser.unescape(match.group(1))
+            new_name = '#%(bug_id)s -  %(title)s' % locals()
             if card.name != new_name:
+                print 'Setting name from:\n%s\nTo:\n%s' % (card.name, new_name)
                 card.set_name(new_name)
+
+            description = card.description
+            if not re.search('\[(Bugzilla #\d+)\]', description):
+                description = re.sub('\s*\[bugzilla\].*', '', description)
+
+                new_description = (DESCRIPTION_PATTERN % dict(
+                    bug_id=bug_id,
+                    url=url,
+                    description=description.strip(),
+                )).strip()
+
+                print 'setting description from:\n%s\n\nTo:\n%s' % (
+                    card.description,
+                    new_description,
+                )
+                card.set_description(new_description)
         else:
             print 'Unable to get bugzilla info from: %s' % url
 
     else:
-        print 'Unable to match %r' % card
-        pprint.pprint(card.__dict__)
+        print 'Unable to match: %s' % card.name
 
