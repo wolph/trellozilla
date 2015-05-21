@@ -6,8 +6,7 @@ import HTMLParser
 
 BUGZILLA_URL = 'http://bugzilla.3xo.eu/show_bug.cgi?id=%(id)s'
 DESCRIPTION_PATTERN = '''
-[Bugzilla #%(bug_id)s](%(url)s)
-
+[Bugzilla \#%(bug_id)s](%(url)s)
 %(description)s
 '''
 
@@ -41,45 +40,75 @@ except ImportError:
 # for board in client.list_boards():
 #     print board, board.__dict__
 
-board = client.get_board('54e476a396124a3eec92625a')
-parser = HTMLParser.HTMLParser()
 
-for card in board.all_cards():
-    match = re.search('(\d{4})', card.name)
+def get_bug_id(card):
+    match = re.search(r'(\d{4})', card.name)
     if match and 1000 < int(match.group(1)) < 3000:
-        bug_id = match.group(1)
-        print 'Bug ID: %s' % bug_id
-        assert bug_id.isdigit()
+        return int(match.group(1))
 
-        url = BUGZILLA_URL % dict(id=bug_id)
-        request = requests.get(url)
-        match = re.search('<title>Bug %s - ([^<]+)</title>' % bug_id,
-                          request.text)
-        if match:
-            title = parser.unescape(match.group(1))
-            new_name = '#%(bug_id)s -  %(title)s' % locals()
-            if card.name != new_name:
-                print 'Setting name from:\n%s\nTo:\n%s' % (card.name, new_name)
-                card.set_name(new_name)
 
-            description = card.description
-            if not re.search('\[(Bugzilla #\d+)\]', description):
-                description = re.sub('\s*\[bugzilla\].*', '', description)
+def get_description(card):
+    # Cleaning up old/broken link formats and whitespace
+    description = card.description.strip()
+    description = re.sub('\s+$', '', description)
+    description = re.sub(r'\[(Bugzilla \\*#\d+|bugzilla)\].+\n', '',
+                         description)
+    description = re.sub(r'\(http://bugzilla[^)]+\)\n?', '', description)
+    description = re.sub(r'\[Bugzilla [^\]]+\]\n?', '', description)
+    description = description.strip()
 
-                new_description = (DESCRIPTION_PATTERN % dict(
-                    bug_id=bug_id,
-                    url=url,
-                    description=description.strip(),
-                )).strip()
+    if(not re.search(r'\[(Bugzilla \#\d+)\]', description)
+            or description != card.description.strip()):
 
-                print 'setting description from:\n%s\n\nTo:\n%s' % (
-                    card.description,
-                    new_description,
-                )
-                card.set_description(new_description)
-        else:
-            print 'Unable to get bugzilla info from: %s' % url
+        new_description = DESCRIPTION_PATTERN % dict(
+            bug_id=card.bug_id,
+            url=BUGZILLA_URL % dict(id=card.bug_id),
+            description=description.strip(),
+        )
+        return new_description.strip()
+
+
+def get_name(card):
+    url = BUGZILLA_URL % dict(id=card.bug_id)
+    request = requests.get(url)
+    match = re.search(r'<title>Bug %s - ([^<]+)</title>' % card.bug_id,
+                      request.text)
+
+    if match:
+        name = parser.unescape(match.group(1))
+        return '#%(bug_id)s -  %(name)s' % dict(
+            bug_id=card.bug_id,
+            name=name,
+        )
+
+
+def update_card(card):
+    card.bug_id = get_bug_id(card)
+    if card.bug_id:
+        print 'Bug ID: %d' % card.bug_id
+
+        new_name = get_name(card)
+        if card.name != new_name:
+            print 'Setting name from:\n%s\nTo:\n%s' % (card.name, new_name)
+            card.set_name(new_name)
+
+        new_description = get_description(card)
+        if card.description != new_description:
+            print 'setting description from: %r\nTo: %r' % (
+                card.description,
+                new_description,
+            )
+            card.set_description(new_description)
 
     else:
         print 'Unable to match: %s' % card.name
+
+parser = HTMLParser.HTMLParser()
+board = client.get_board('54e476a396124a3eec92625a')
+
+for card in board.all_cards():
+    try:
+        update_card(card)
+    except Exception, e:
+        print 'Unable to update %r, error: %r' % (card, e)
 
