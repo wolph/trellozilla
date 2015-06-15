@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import re
+import sys
 import requests
 import pyfscache
 import HTMLParser
@@ -25,6 +26,8 @@ COMMENT_PATTERN = '''
 [By %(name)s at %(timestamp)s](%(url)s)
 %(comment)s
 '''.strip()
+
+PRIORITY_RE = re.compile('P\d')
 
 try:
     from client import client
@@ -78,6 +81,18 @@ def get_bug_id(card):
         return int(match.group(1))
 
 
+def get_estimate(card):
+    match = re.search(r'\((\d{1,2})\)', card.name)
+    if match and 1 <= int(match.group(1)) < 40:
+        return int(match.group(1))
+
+
+def get_time_spent(card):
+    match = re.search(r'\[(\d{1,2})\]', card.name)
+    if match and 1 <= int(match.group(1)) < 40:
+        return int(match.group(1))
+
+
 def get_description(card):
     # Cleaning up old/broken link formats and whitespace
     description = card.description.strip()
@@ -105,10 +120,37 @@ def get_name(card):
 
     if match:
         name = parser.unescape(match.group(1))
-        return '#%(bug_id)s -  %(name)s' % dict(
-            bug_id=card.bug_id,
-            name=name,
-        )
+        name_parts = ['#%d' % card.bug_id]
+        if card.estimate:
+            name_parts.append('(%d)' % card.estimate)
+
+        if card.time_spent:
+            name_parts.append('[%d]' % card.time_spent)
+
+        name_parts.append('-')
+        name_parts.append(name)
+        return ' '.join(name_parts)
+
+
+def update_priority(card):
+    text = get_bugzilla_page(card.bug_id)
+    match = re.search(r'<option value="(P\d)" selected>', text)
+    if match:
+        priority = match.group(1)
+
+        for label in card.labels:
+            if label.name == priority:
+                # Already has this priority, skip...
+                return
+            elif PRIORITY_RE.match(label.name):
+                print 'Should remove %r from %r' % (label, card)
+
+        print 'Adding priority %s to %s' % (priority, card)
+        priority_label = get_priority_label(card.board, priority)
+        if priority_label:
+            card.add_label(priority_label)
+        else:
+            print 'Label for priority %s does not exist' % priority
 
 
 def add_comments(card):
@@ -169,6 +211,8 @@ def add_comments(card):
 
 def update_card(card):
     card.bug_id = get_bug_id(card)
+    card.estimate = get_estimate(card)
+    card.time_spent = get_time_spent(card)
     if card.bug_id:
         print 'Bug ID: %d' % card.bug_id
 
@@ -186,6 +230,7 @@ def update_card(card):
             card.set_description(new_description)
 
         add_comments(card)
+        update_priority(card)
     else:
         print 'Unable to match: %s' % card.name
 
@@ -203,11 +248,49 @@ def get_comments(card):
 
 
 @cache
-def get_cards():
-    board = client.get_board('54e476a396124a3eec92625a')
+def get_labels(board):
+    return board.get_labels()
+
+
+def get_priority_label(board, priority):
+    for label in get_labels(board):
+        if PRIORITY_RE.match(label.name) and label.name == priority:
+            return label
+
+
+@cache
+def list_boards():
+    return client.list_boards()
+
+
+def get_cards(board):
     return list(board.all_cards())
 
 if __name__ == '__main__':
-    pool = multiprocessing.Pool(8)
-    pool.map(update_card, get_cards())
+    for board in list_boards():
+        if board.name.lower().startswith('DC'):
+            print 'Skipping %r' % board
+            continue
+
+        print 'Processing %r' % board
+
+        if sys.argv[1:]:
+            cards = get_cards(board)
+            selected = []
+            for card in cards:
+                for arg in sys.argv[1:]:
+                    if arg not in card.name:
+                        continue
+
+                    selected.append(card)
+        else:
+            selected = get_cards(board)
+
+        print 'Got cards: %r' % selected
+
+        if len(selected) == 1:
+            update_card(*selected)
+        else:
+            pool = multiprocessing.Pool(4)
+            pool.map(update_card, selected)
 
