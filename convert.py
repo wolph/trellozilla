@@ -119,17 +119,17 @@ def get_name(card):
     match = re.search(r'<title>Bug %s - ([^<]+)</title>' % card.bug_id, text)
 
     if match:
-        name = parser.unescape(match.group(1))
-        name_parts = ['#%d' % card.bug_id]
+        name = parser.unescape(match.group(1)).decode('utf-8', 'replace')
+        name_parts = [u'#%d' % card.bug_id]
         if card.estimate:
-            name_parts.append('(%d)' % card.estimate)
+            name_parts.append(u'(%d)' % card.estimate)
 
         if card.time_spent:
-            name_parts.append('[%d]' % card.time_spent)
+            name_parts.append(u'[%d]' % card.time_spent)
 
-        name_parts.append('-')
+        name_parts.append(u'-')
         name_parts.append(name)
-        return ' '.join(name_parts)
+        return u' '.join(name_parts)
 
 
 def update_priority(card):
@@ -214,11 +214,12 @@ def update_card(card):
     card.estimate = get_estimate(card)
     card.time_spent = get_time_spent(card)
     if card.bug_id:
-        print 'Bug ID: %d' % card.bug_id
+        print 'Bug ID: %d' % card.bug_id, card.name
 
         new_name = get_name(card)
-        if card.name != new_name:
-            print 'Setting name from:\n%s\nTo:\n%s' % (card.name, new_name)
+        if card.name.decode('utf-8', 'replace') != new_name:
+            print 'Setting name from:\n%s\nTo:\n%s' % (
+                card.name.decode('utf-8', 'replace'), new_name)
             card.set_name(new_name)
 
         new_description = get_description(card)
@@ -260,7 +261,7 @@ def get_priority_label(board, priority):
 
 @cache
 def list_boards():
-    return client.list_boards()
+    return client.get_organization('3tu').all_boards()
 
 
 def get_cards(board):
@@ -268,10 +269,6 @@ def get_cards(board):
 
 if __name__ == '__main__':
     for board in list_boards():
-        if board.name.lower().startswith('DC'):
-            print 'Skipping %r' % board
-            continue
-
         print 'Processing %r' % board
 
         if sys.argv[1:]:
@@ -286,11 +283,14 @@ if __name__ == '__main__':
         else:
             selected = get_cards(board)
 
-        print 'Got cards: %r' % selected
+        selected = sorted(selected, key=lambda c: c.name)
+
+        print 'Got %d cards' % len(selected)
 
         if len(selected) == 1:
             update_card(*selected)
         else:
-            pool = multiprocessing.Pool(4)
-            pool.map(update_card, selected)
+            # pool = multiprocessing.Pool(4)
+            # pool.map(update_card, selected)
+            map(update_card, selected)
 
