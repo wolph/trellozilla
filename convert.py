@@ -12,12 +12,17 @@ from datetime import datetime
 
 # Enabling a tiny bit of cache so Trello doesn't block us
 cache = pyfscache.FSCache('cache', minutes=2)
+long_cache = pyfscache.FSCache('cache', days=1)
 
 # HTML parser for unescaping of html stuff
 parser = HTMLParser.HTMLParser()
 
 
-BUGZILLA_URL = 'http://bugzilla.3xo.eu/show_bug.cgi?id=%(id)s'
+BUGZILLA_URL = 'http://bugzilla.3xo.eu/'
+BUGZILLA_URL = 'http://bugzilla.dev-ict.tudelft.nl/'
+BUGZILLA_BUG_URL = BUGZILLA_URL + 'show_bug.cgi?id=%(id)s'
+BUGZILLA_LIST_URL = (BUGZILLA_URL +
+                     'buglist.cgi?bug_status=__open__&product=%(product)s')
 DESCRIPTION_PATTERN = '''
 [Bugzilla \#%(bug_id)s](%(url)s)
 %(description)s
@@ -27,6 +32,15 @@ COMMENT_PATTERN = '''
 %(comment)s
 '''.strip()
 
+BUGZILLA_BOARD_MAPPING = {
+    '557969772d727f75f263d488': '3TU%20Datacentrum',
+    '55797c7e80c8eb60e1e2470e': 'Datacite+%28DOI%29',
+    '55797c7664bdadd2d464d0b3': 'Zandmotor',
+}
+
+ACTIVE_BOARD = '54e476a396124a3eec92625a'
+
+BUG_ID_PATTERN = re.compile(r'<a href="show_bug\.cgi\?id=(?P<bug_id>\d+)">')
 PRIORITY_RE = re.compile('P\d')
 
 try:
@@ -108,7 +122,7 @@ def get_description(card):
 
         new_description = DESCRIPTION_PATTERN % dict(
             bug_id=card.bug_id,
-            url=BUGZILLA_URL % dict(id=card.bug_id),
+            url=BUGZILLA_BUG_URL % dict(id=card.bug_id),
             description=description.strip(),
         )
         return new_description.strip()
@@ -176,7 +190,7 @@ def add_comments(card):
     authors = [submitter_re.search(text).groupdict()]
     authors += [m.groupdict() for m in authors_re.finditer(text)]
 
-    bugzilla_url = BUGZILLA_URL % dict(id=card.bug_id)
+    bugzilla_url = BUGZILLA_BUG_URL % dict(id=card.bug_id)
 
     comments = collections.OrderedDict()
     for author, match in zip(authors, comments_re.finditer(text)):
@@ -238,7 +252,7 @@ def update_card(card):
 
 @cache
 def get_bugzilla_page(bug_id):
-    url = BUGZILLA_URL % dict(id=bug_id)
+    url = BUGZILLA_BUG_URL % dict(id=bug_id)
     request = requests.get(url)
     return request.text
 
@@ -248,7 +262,7 @@ def get_comments(card):
     return card.get_comments()
 
 
-@cache
+@long_cache
 def get_labels(board):
     return board.get_labels()
 
@@ -259,15 +273,67 @@ def get_priority_label(board, priority):
             return label
 
 
-@cache
+@long_cache
 def list_boards():
     return client.get_organization('3tu').all_boards()
+
+
+def get_board(board_id):
+    for board in list_boards():
+        if board.id == board_id:
+            return board
+
+
+@cache
+def list_bugzilla_bugs(board):
+    bug_ids = []
+    if board.id not in BUGZILLA_BOARD_MAPPING:
+        return bug_ids
+
+    url = BUGZILLA_LIST_URL % dict(product=BUGZILLA_BOARD_MAPPING[board.id])
+    request = requests.get(url)
+    for match in BUG_ID_PATTERN.finditer(request.text):
+        bug_ids.append(int(match.group('bug_id')))
+
+    return bug_ids
 
 
 def get_cards(board):
     return list(board.all_cards())
 
 if __name__ == '__main__':
+    bugzilla_ids_per_project = {}
+    all_trello_ids = set()
+
+    if not sys.argv[1:]:
+        for board in list_boards():
+            print 'pre-processing %s: %r' % (board.id, board)
+            bugzilla_ids = set(list_bugzilla_bugs(board))
+            bugzilla_ids_per_project[board] = bugzilla_ids
+
+            for card in get_cards(board):
+                all_trello_ids.add(get_bug_id(card))
+
+        for board, ids in bugzilla_ids_per_project.iteritems():
+            ids -= all_trello_ids
+            if not ids:
+                continue
+
+            for list_ in board.all_lists():
+                if list_.name.lower() == 'new':
+                    break
+            else:
+                list_ = board.add_list('NEW')
+
+            print 'Adding %d bugs to %s backlog' % (len(ids), board)
+            for bug_id in ids:
+                print 'Added card for bug %d' % bug_id
+                list_.add_card(str(bug_id))
+
+    active_bugs = set()
+    for card in get_cards(get_board(ACTIVE_BOARD)):
+        active_bugs.add(get_bug_id(card))
+
     for board in list_boards():
         print 'Processing %r' % board
 
@@ -281,7 +347,16 @@ if __name__ == '__main__':
 
                     selected.append(card)
         else:
-            selected = get_cards(board)
+            selected = []
+            for card in get_cards(board):
+                if board.id == ACTIVE_BOARD:
+                    selected.append(card)
+                elif get_bug_id(card) in active_bugs:
+                    print 'Deleting duplicate card %r' % card
+                    card.delete()
+                else:
+                    selected.append(card)
+
 
         selected = sorted(selected, key=lambda c: c.name)
 
@@ -293,4 +368,5 @@ if __name__ == '__main__':
             # pool = multiprocessing.Pool(4)
             # pool.map(update_card, selected)
             map(update_card, selected)
+
 
