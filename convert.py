@@ -39,6 +39,7 @@ BUGZILLA_BOARD_MAPPING = {
 }
 
 ACTIVE_BOARD = '54e476a396124a3eec92625a'
+ARCHIVE_BOARD = '5578512e66f2e95a79ae4a01'
 
 BUG_ID_PATTERN = re.compile(r'<a href="show_bug\.cgi\?id=(?P<bug_id>\d+)">')
 PRIORITY_RE = re.compile('P\d')
@@ -334,6 +335,10 @@ if __name__ == '__main__':
     for card in get_cards(get_board(ACTIVE_BOARD)):
         active_bugs.add(get_bug_id(card))
 
+    archived_bugs = set()
+    for card in get_cards(get_board(ARCHIVE_BOARD)):
+        archived_bugs.add(get_bug_id(card))
+
     for board in list_boards():
         print 'Processing %r' % board
 
@@ -352,7 +357,11 @@ if __name__ == '__main__':
                 if board.id == ACTIVE_BOARD:
                     selected.append(card)
                 elif get_bug_id(card) in active_bugs:
-                    print 'Deleting duplicate card %r' % card
+                    print 'Deleting duplicate card %r (in active)' % card
+                    card.delete()
+                elif get_bug_id(card) in archived_bugs \
+                        and board.id != ARCHIVE_BOARD:
+                    print 'Deleting duplicate card %r (in archive)' % card
                     card.delete()
                 else:
                     selected.append(card)
