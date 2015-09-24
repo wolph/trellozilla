@@ -225,6 +225,11 @@ def add_comments(card):
 
 
 def update_card(card):
+    if card.closed:
+        print 'Deleting archived card %r' % card
+        card.delete()
+        return
+
     card.bug_id = get_bug_id(card)
     card.estimate = get_estimate(card)
     card.time_spent = get_time_spent(card)
