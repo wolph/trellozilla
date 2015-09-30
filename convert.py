@@ -7,8 +7,10 @@ import pyfscache
 import HTMLParser
 import collections
 import multiprocessing
-
 from datetime import datetime
+
+import utils
+import settings
 
 # Enabling a tiny bit of cache so Trello doesn't block us
 cache = pyfscache.FSCache('cache', minutes=2)
@@ -17,32 +19,7 @@ long_cache = pyfscache.FSCache('cache', days=1)
 # HTML parser for unescaping of html stuff
 parser = HTMLParser.HTMLParser()
 
-
-BUGZILLA_URL = 'http://bugzilla.3xo.eu/'
-BUGZILLA_URL = 'http://bugzilla.dev-ict.tudelft.nl/'
-BUGZILLA_BUG_URL = BUGZILLA_URL + 'show_bug.cgi?id=%(id)s'
-BUGZILLA_LIST_URL = (BUGZILLA_URL +
-                     'buglist.cgi?bug_status=__open__&product=%(product)s')
-DESCRIPTION_PATTERN = '''
-[Bugzilla \#%(bug_id)s](%(url)s)
-%(description)s
-'''
-COMMENT_PATTERN = '''
-[By %(name)s at %(timestamp)s](%(url)s)
-%(comment)s
-'''.strip()
-
-BUGZILLA_BOARD_MAPPING = {
-    '557969772d727f75f263d488': '3TU%20Datacentrum',
-    '55797c7e80c8eb60e1e2470e': 'Datacite+%28DOI%29',
-    '55797c7664bdadd2d464d0b3': 'Zandmotor',
-}
-
-ACTIVE_BOARD = '54e476a396124a3eec92625a'
-ARCHIVE_BOARD = '5578512e66f2e95a79ae4a01'
-
-BUG_ID_PATTERN = re.compile(r'<a href="show_bug\.cgi\?id=(?P<bug_id>\d+)">')
-PRIORITY_RE = re.compile('P\d')
+session = utils.get_session()
 
 try:
     from client import client
@@ -123,7 +100,7 @@ def get_description(card):
 
         new_description = DESCRIPTION_PATTERN % dict(
             bug_id=card.bug_id,
-            url=BUGZILLA_BUG_URL % dict(id=card.bug_id),
+            url=settings.BUGZILLA_BUG_URL % dict(id=card.bug_id),
             description=description.strip(),
         )
         return new_description.strip()
@@ -168,7 +145,8 @@ def update_priority(card):
             print 'Label for priority %s does not exist' % priority
 
 
-def add_comments(card):
+@cache
+def get_bugzilla_comments(card, from_trello=False):
     text = get_bugzilla_page(card.bug_id)
 
     comments_re = re.compile('''
@@ -191,7 +169,7 @@ def add_comments(card):
     authors = [submitter_re.search(text).groupdict()]
     authors += [m.groupdict() for m in authors_re.finditer(text)]
 
-    bugzilla_url = BUGZILLA_BUG_URL % dict(id=card.bug_id)
+    bugzilla_url = settings.BUGZILLA_BUG_URL % dict(id=card.bug_id)
 
     comments = collections.OrderedDict()
     for author, match in zip(authors, comments_re.finditer(text)):
@@ -204,6 +182,13 @@ def add_comments(card):
             email=author['email'],
             name=author['name'],
         )
+        if from_trello:
+            if not comment['comment'].startswith('From Trello: '):
+                continue
+        else:
+            if comment['comment'].startswith('From Trello: '):
+                continue
+
         for k, v in comment.items():
             if isinstance(v, basestring):
                 v = parser.unescape(v).strip()
@@ -212,13 +197,19 @@ def add_comments(card):
 
         comments[comment['url']] = comment
 
+    return comments
+
+
+def add_comments(card):
+    comments = get_bugzilla_comments(card)
+
     # Remove all comments that have been added already
     for comment in get_comments(card):
         for k in comments.keys():
             if k in comment['data']['text']:
                 del comments[k]
 
-    for url, comment in comments.iteritems():
+    for url, comment in sorted(comments.iteritems()):
         formatted_comment = COMMENT_PATTERN % comment
         print 'Adding comment', formatted_comment.split('\n')[0]
         card.comment(formatted_comment)
@@ -258,8 +249,8 @@ def update_card(card):
 
 @cache
 def get_bugzilla_page(bug_id):
-    url = BUGZILLA_BUG_URL % dict(id=bug_id)
-    request = requests.get(url)
+    url = settings.BUGZILLA_BUG_URL % dict(id=bug_id)
+    request = session.get(url)
     return request.text
 
 
@@ -293,11 +284,12 @@ def get_board(board_id):
 @cache
 def list_bugzilla_bugs(board):
     bug_ids = []
-    if board.id not in BUGZILLA_BOARD_MAPPING:
+    if board.id not in settings.BUGZILLA_BOARD_MAPPING:
         return bug_ids
 
-    url = BUGZILLA_LIST_URL % dict(product=BUGZILLA_BOARD_MAPPING[board.id])
-    request = requests.get(url)
+    url = settings.BUGZILLA_LIST_URL % dict(
+        product=settings.BUGZILLA_BOARD_MAPPING[board.id])
+    request = session.get(url)
     for match in BUG_ID_PATTERN.finditer(request.text):
         bug_ids.append(int(match.group('bug_id')))
 
@@ -383,4 +375,5 @@ if __name__ == '__main__':
             # pool.map(update_card, selected)
             map(update_card, selected)
 
+    utils.save_session(session)
 
