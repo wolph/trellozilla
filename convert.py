@@ -145,7 +145,6 @@ def update_priority(card):
             print 'Label for priority %s does not exist' % priority
 
 
-@cache
 def get_bugzilla_comments(card, from_trello=False):
     text = get_bugzilla_page(card.bug_id)
 

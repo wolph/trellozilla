@@ -73,8 +73,11 @@ def add_comment(session, card, data):
         comment=data['data']['text'],
         name=data['memberCreator']['fullName'],
     )
+
+    convert.get_bugzilla_page.expire(card.bug_id)
     request = session.post(settings.BUGZILLA_BUG_POST_URL, data=post_data)
     print 'Posting comment to %r: %r' % (card, post_data['comment'])
+
 
 def main(session, *bug_ids):
     client = Client()
