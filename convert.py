@@ -2,11 +2,9 @@
 
 import re
 import sys
-import requests
 import pyfscache
 import HTMLParser
 import collections
-import multiprocessing
 from datetime import datetime
 
 import utils
@@ -98,7 +96,7 @@ def get_description(card):
     if(not re.search(r'\[(Bugzilla \#\d+)\]', description)
             or description != card.description.strip()):
 
-        new_description = DESCRIPTION_PATTERN % dict(
+        new_description = settings.DESCRIPTION_PATTERN % dict(
             bug_id=card.bug_id,
             url=settings.BUGZILLA_BUG_URL % dict(id=card.bug_id),
             description=description.strip(),
@@ -134,7 +132,7 @@ def update_priority(card):
             if label.name == priority:
                 # Already has this priority, skip...
                 return
-            elif PRIORITY_RE.match(label.name):
+            elif settings.PRIORITY_RE.match(label.name):
                 print 'Should remove %r from %r' % (label, card)
 
         print 'Adding priority %s to %s' % (priority, card)
@@ -209,7 +207,7 @@ def add_comments(card):
                 del comments[k]
 
     for url, comment in sorted(comments.iteritems()):
-        formatted_comment = COMMENT_PATTERN % comment
+        formatted_comment = settings.COMMENT_PATTERN % comment
         print 'Adding comment', formatted_comment.split('\n')[0]
         card.comment(formatted_comment)
 
@@ -265,7 +263,7 @@ def get_labels(board):
 
 def get_priority_label(board, priority):
     for label in get_labels(board):
-        if PRIORITY_RE.match(label.name) and label.name == priority:
+        if settings.PRIORITY_RE.match(label.name) and label.name == priority:
             return label
 
 
@@ -289,7 +287,7 @@ def list_bugzilla_bugs(board):
     url = settings.BUGZILLA_LIST_URL % dict(
         product=settings.BUGZILLA_BOARD_MAPPING[board.id])
     request = session.get(url)
-    for match in BUG_ID_PATTERN.finditer(request.text):
+    for match in settings.BUG_ID_PATTERN.finditer(request.text):
         bug_ids.append(int(match.group('bug_id')))
 
     return bug_ids
@@ -328,11 +326,11 @@ if __name__ == '__main__':
                 list_.add_card(str(bug_id))
 
     active_bugs = set()
-    for card in get_cards(get_board(ACTIVE_BOARD)):
+    for card in get_cards(get_board(settings.ACTIVE_BOARD)):
         active_bugs.add(get_bug_id(card))
 
     archived_bugs = set()
-    for card in get_cards(get_board(ARCHIVE_BOARD)):
+    for card in get_cards(get_board(settings.ARCHIVE_BOARD)):
         archived_bugs.add(get_bug_id(card))
 
     for board in list_boards():
@@ -350,18 +348,17 @@ if __name__ == '__main__':
         else:
             selected = []
             for card in get_cards(board):
-                if board.id == ACTIVE_BOARD:
+                if board.id == settings.ACTIVE_BOARD:
                     selected.append(card)
                 elif get_bug_id(card) in active_bugs:
                     print 'Deleting duplicate card %r (in active)' % card
                     card.delete()
                 elif get_bug_id(card) in archived_bugs \
-                        and board.id != ARCHIVE_BOARD:
+                        and board.id != settings.ARCHIVE_BOARD:
                     print 'Deleting duplicate card %r (in archive)' % card
                     card.delete()
                 else:
                     selected.append(card)
-
 
         selected = sorted(selected, key=lambda c: c.name)
 
