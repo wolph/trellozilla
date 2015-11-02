@@ -8,6 +8,7 @@ import collections
 from datetime import datetime
 
 import utils
+import trello
 import settings
 
 # Enabling a tiny bit of cache so Trello doesn't block us
@@ -18,6 +19,14 @@ long_cache = pyfscache.FSCache('cache', days=1)
 parser = HTMLParser.HTMLParser()
 
 session = utils.get_session()
+
+
+client = trello.TrelloClient(
+    api_key=settings.API_KEY,
+    api_secret=settings.API_SECRET,
+    token=settings.TOKEN,
+    token_secret=settings.TOKEN_SECRET,
+)
 
 try:
     from client import client
