@@ -7,3 +7,4 @@ pyopenssl
 ndg-httpsclient
 pyasn1
 lxml
+raven
