@@ -4,8 +4,12 @@ import re
 import sys
 import pyfscache
 import HTMLParser
-import collections
 from datetime import datetime
+
+try:
+    from collections import OrderedDict
+except:
+    from ordereddict import OrderedDict
 
 import utils
 import trello
@@ -177,7 +181,7 @@ def get_bugzilla_comments(card, from_trello=False):
 
     bugzilla_url = settings.BUGZILLA_BUG_URL % dict(id=card.bug_id)
 
-    comments = collections.OrderedDict()
+    comments = OrderedDict()
     for author, match in zip(authors, comments_re.finditer(text)):
         comment = dict(
             url=bugzilla_url + '#c' + match.group('comment_id'),
