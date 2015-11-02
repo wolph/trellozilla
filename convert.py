@@ -229,11 +229,13 @@ def update_card(card):
         print 'Unable to match: %s' % card.name
 
 
-@cache
 def get_bugzilla_page(bug_id):
-    url = settings.BUGZILLA_BUG_URL % dict(id=bug_id)
-    request = session.get(url)
-    return request.text
+    key = 'bugzilla_page', bug_id
+    if key not in cache:
+        url = settings.BUGZILLA_BUG_URL % dict(id=bug_id)
+        request = session.get(url)
+        cache[key] = request.text
+    return cache[key]
 
 
 @cache
