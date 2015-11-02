@@ -1,8 +1,8 @@
 py-trello
-git+https://github.com/plish/Trolly.git#egg=trolly-0.2.1
+git+https://github.com/plish/Trolly.git#egg=trolly
 urllib3[secure]
-pyfscache==0.9.12
-ordereddict==1.1
+pyfscache
+ordereddict
 pyopenssl
 ndg-httpsclient
 pyasn1
