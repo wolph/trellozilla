@@ -75,7 +75,7 @@ def add_comment(session, card, data):
     )
 
     convert.cache.expire(('bugzilla_page', card.bug_id))
-    session.post(settings.BUGZILLA_BUG_POST_URL, data=post_data)
+    # session.post(settings.BUGZILLA_BUG_POST_URL, data=post_data)
     print 'Posting comment to %r: %r' % (card, post_data['comment'])
 
 
