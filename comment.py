@@ -52,11 +52,17 @@ def get_comments(list_):
     return list_.get_comments()
 
 
+def simple_compare(a, b):
+    a = convert.strip_tags(a).strip()
+    b = convert.strip_tags(b).strip()
+    return a == b
+
+
 def add_comment(session, card, data):
     comments = convert.get_bugzilla_comments(card, from_trello=True)
     for url, comment in comments.iteritems():
         text = comment['comment'].split('\n', 1)[-1].strip()
-        if text == data['data']['text'].strip():
+        if simple_compare(text, data['data']['text'].strip()):
             return
 
     page = html.fromstring(convert.get_bugzilla_page(card.bug_id))
@@ -75,7 +81,7 @@ def add_comment(session, card, data):
     )
 
     convert.cache.expire(('bugzilla_page', card.bug_id))
-    # session.post(settings.BUGZILLA_BUG_POST_URL, data=post_data)
+    session.post(settings.BUGZILLA_BUG_POST_URL, data=post_data)
     print 'Posting comment to %r: %r' % (card, post_data['comment'])
 
 
