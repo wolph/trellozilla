@@ -109,7 +109,7 @@ def get_name(card):
 
 def update_priority(card):
     text = get_bugzilla_page(card.bug_id)
-    match = re.search(r'<option value="(P\d)" selected>', text)
+    match = re.search(r'<option value="(P\d+)" selected>', text)
     if match:
         priority = match.group(1)
 
@@ -132,21 +132,21 @@ def get_bugzilla_comments(card, from_trello=False):
     text = get_bugzilla_page(card.bug_id)
 
     comments_re = re.compile('''
-        <pre\s+id="comment_text_(?P<comment_id>\d)">\s*
+        <pre\s+id="comment_text_(?P<comment_id>\d+)">\s*
             (?P<comment>.+?)\s*
         </pre>
-    ''', re.VERBOSE | re.DOTALL)
+    ''', re.VERBOSE | re.DOTALL | re.UNICODE)
 
     submitter_re = re.compile('''
         <a\s+href="mailto:(?P<email>[^"]+)">(?P<name>.+?)\s+&lt;.+?
         Opened:\s+(?P<timestamp>\d{4}-\d{2}-\d{2}\s\d{2}:\d{2})
-    ''', re.VERBOSE | re.DOTALL)
+    ''', re.VERBOSE | re.DOTALL | re.UNICODE)
 
     authors_re = re.compile('''
         <span\s+class="bz_comment">.+?
             <a\s+href="mailto:(?P<email>[^"]+)">(?P<name>.+?)</a>\s+
                 (?P<timestamp>\d{4}-\d{2}-\d{2}\s\d{2}:\d{2})
-    ''', re.VERBOSE | re.DOTALL)
+    ''', re.VERBOSE | re.DOTALL | re.UNICODE)
 
     authors = [submitter_re.search(text).groupdict()]
     authors += [m.groupdict() for m in authors_re.finditer(text)]

@@ -59,10 +59,13 @@ def simple_compare(a, b):
 
 
 def add_comment(session, card, data):
+    simple_text = data['data']['text'].strip()
     comments = convert.get_bugzilla_comments(card, from_trello=True)
+    non_matching = []
     for url, comment in comments.iteritems():
         text = comment['comment'].split('\n', 1)[-1].strip()
-        if simple_compare(text, data['data']['text'].strip()):
+        non_matching.append(text)
+        if simple_compare(text, simple_text):
             return
 
     page = html.fromstring(convert.get_bugzilla_page(card.bug_id))
@@ -81,6 +84,9 @@ def add_comment(session, card, data):
     )
 
     convert.cache.expire(('bugzilla_page', card.bug_id))
+    print 'Found comment: %r' % simple_text
+    for text in non_matching:
+        print ' - %r' % text
     session.post(settings.BUGZILLA_BUG_POST_URL, data=post_data)
     print 'Posting comment to %r: %r' % (card, post_data['comment'])
 
@@ -98,8 +104,11 @@ def main(session, *bug_ids):
         for comment in board.actions:
             data = comment['data']
             card = client.create_card(data['card'])
+
             if not BUGZILLA_COMMENT_RE.match(data['text']):
                 card.bug_id = convert.get_bug_id(card)
+                if card.bug_id not in bug_ids:
+                    continue
                 add_comment(session, card, comment)
 
 
