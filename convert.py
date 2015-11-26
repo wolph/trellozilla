@@ -314,7 +314,9 @@ if __name__ == '__main__':
 
     active_bugs = set()
     for card in get_cards(get_board(settings.ACTIVE_BOARD)):
-        active_bugs.add(get_bug_id(card))
+        bug_id = get_bug_id(card)
+        if bug_id:
+            active_bugs.add(bug_id)
 
     archived_bugs = set()
     for card in get_cards(get_board(settings.ARCHIVE_BOARD)):
@@ -335,14 +337,17 @@ if __name__ == '__main__':
         else:
             selected = []
             for card in get_cards(board):
+                bug_id = get_bug_id(card)
                 if board.id == settings.ACTIVE_BOARD:
                     selected.append(card)
-                elif get_bug_id(card) in active_bugs:
+                elif bug_id and bug_id in active_bugs:
                     print 'Deleting duplicate card %r (in active)' % card
+                    print 'Original: %r' % active_bugs[bug_id]
                     card.delete()
-                elif get_bug_id(card) in archived_bugs \
+                elif bug_id and bug_id in archived_bugs \
                         and board.id != settings.ARCHIVE_BOARD:
                     print 'Deleting duplicate card %r (in archive)' % card
+                    print 'Original: %r' % archived_bugs[bug_id]
                     card.delete()
                 else:
                     selected.append(card)
