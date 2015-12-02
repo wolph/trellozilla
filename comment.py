@@ -107,7 +107,7 @@ def main(session, *bug_ids):
 
             if not BUGZILLA_COMMENT_RE.match(data['text']):
                 card.bug_id = convert.get_bug_id(card)
-                if card.bug_id not in bug_ids:
+                if bug_ids and card.bug_id not in bug_ids:
                     continue
                 add_comment(session, card, comment)
 
