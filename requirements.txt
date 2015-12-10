@@ -8,3 +8,4 @@ ndg-httpsclient
 pyasn1
 lxml
 raven
+cssselect

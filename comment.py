@@ -58,6 +58,17 @@ def simple_compare(a, b):
     return a == b
 
 
+def get_form(card):
+    page = html.fromstring(convert.get_bugzilla_page(card.bug_id))
+    for form in page.forms:
+        if form.get('name') == 'changeform':
+            break
+    else:
+        raise RuntimeError('cant find changeform')
+
+    return form
+
+
 def add_comment(session, card, data):
     simple_text = data['data']['text'].strip()
     comments = convert.get_bugzilla_comments(card, from_trello=True)
@@ -68,14 +79,7 @@ def add_comment(session, card, data):
         if simple_compare(text, simple_text):
             return
 
-    page = html.fromstring(convert.get_bugzilla_page(card.bug_id))
-
-    for form in page.forms:
-        if form.get('name') == 'changeform':
-            break
-    else:
-        raise RuntimeError('cant find changeform')
-
+    form = get_form(card)
     post_data = dict(form.form_values())
     post_data['comment'] = settings.BUGZILLA_COMMENT_PATTERN % dict(
         short_link=data['data']['card']['shortLink'],
@@ -91,6 +95,49 @@ def add_comment(session, card, data):
     print 'Posting comment to %r: %r' % (card, post_data['comment'])
 
 
+def set_status(session, card, data):
+    page = convert.get_bugzilla_page(card.bug_id).lower()
+    list_name = data['listAfter']['name'].lower()
+    knob = None
+    resolution = None
+    if list_name.startswith('done sprint '):
+        status = 'verified fixed'
+    elif list_name == 'to do':
+        status = 'new'
+    elif list_name == 'testing':
+        status = 'resolved fixed'
+        if '<td>resolved</td>' not in page:
+            knob = 'resolve'
+            resolution = 'FIXED'
+    elif list_name == 'doing':
+        status = 'assigned'
+        if '<td>assigned</td>' not in page:
+            knob = 'accept'
+    else:
+        print 'Unknown list %r, skipping %r' % (list_name, card)
+        return
+
+    if not knob:
+        return
+
+    form = get_form(card)
+    post_data = dict(form.form_values())
+    post_data['knob'] = knob
+    post_data['comment'] = settings.BUGZILLA_STATUS_PATTERN.format(
+        status=status, **data)
+    if resolution:
+        post_data['resolution'] = resolution
+
+    print 'Changing status for %r to %r (%s)' % (card, status, knob)
+
+    convert.cache.expire(('bugzilla_page', card.bug_id))
+    # session.post(settings.BUGZILLA_BUG_POST_URL, data=post_data)
+    print post_data['comment']
+
+@cache
+def get_moved_cards(organisation):
+    return get_boards(organisation, actions='updateCard:idList')
+
 def main(session, *bug_ids):
     client = Client()
     bugzilla_login(session)
@@ -100,15 +147,35 @@ def main(session, *bug_ids):
     if bug_ids:
         bug_ids = [int(b) for b in bug_ids]
 
+    skip = set()
+    for board in get_moved_cards(organisation):
+        if board.id != '54e476a396124a3eec92625a':
+            continue
+
+        # get_boards(organisation, actions='updateCard:idList'):
+        for action in board.actions:
+            data = action['data']
+            card = client.create_card(data['card'])
+            card.bug_id = convert.get_bug_id(card)
+            if card.bug_id in skip:
+                continue
+            else:
+                skip.add(card.bug_id)
+
+            if bug_ids and card.bug_id not in bug_ids:
+                continue
+
+            set_status(session, card, data)
+
     for board in get_boards(organisation, actions='commentCard'):
         for comment in board.actions:
             data = comment['data']
             card = client.create_card(data['card'])
+            card.bug_id = convert.get_bug_id(card)
+            if bug_ids and card.bug_id not in bug_ids:
+                continue
 
             if not BUGZILLA_COMMENT_RE.match(data['text']):
-                card.bug_id = convert.get_bug_id(card)
-                if bug_ids and card.bug_id not in bug_ids:
-                    continue
                 add_comment(session, card, comment)
 
 
