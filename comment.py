@@ -131,7 +131,7 @@ def set_status(session, card, data):
     print 'Changing status for %r to %r (%s)' % (card, status, knob)
 
     convert.cache.expire(('bugzilla_page', card.bug_id))
-    # session.post(settings.BUGZILLA_BUG_POST_URL, data=post_data)
+    session.post(settings.BUGZILLA_BUG_POST_URL, data=post_data)
     print post_data['comment']
 
 @cache
