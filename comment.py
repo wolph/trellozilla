@@ -157,7 +157,10 @@ def main(session, *bug_ids):
             data = action['data']
             card = client.create_card(data['card'])
             card.bug_id = convert.get_bug_id(card)
-            if card.bug_id in skip:
+
+            if not card.bug_id:
+                continue
+            elif card.bug_id in skip:
                 continue
             else:
                 skip.add(card.bug_id)
@@ -173,6 +176,8 @@ def main(session, *bug_ids):
             card = client.create_card(data['card'])
             card.bug_id = convert.get_bug_id(card)
             if bug_ids and card.bug_id not in bug_ids:
+                continue
+            elif not card.bug_id:
                 continue
 
             if not BUGZILLA_COMMENT_RE.match(data['text']):
