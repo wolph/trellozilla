@@ -122,6 +122,14 @@ def set_status(session, card, data):
 
     form = get_form(card)
     post_data = dict(form.form_values())
+
+    if 'knob-reopen' in page:
+        print 'Reopening %r' % card
+        post_data['knob'] = 'reopen'
+        post_data['comment'] = settings.BUGZILLA_STATUS_PATTERN.format(
+            status='reopened', **data)
+        session.post(settings.BUGZILLA_BUG_POST_URL, data=post_data)
+
     post_data['knob'] = knob
     post_data['comment'] = settings.BUGZILLA_STATUS_PATTERN.format(
         status=status, **data)
@@ -132,11 +140,12 @@ def set_status(session, card, data):
 
     convert.cache.expire(('bugzilla_page', card.bug_id))
     session.post(settings.BUGZILLA_BUG_POST_URL, data=post_data)
-    print post_data['comment']
+
 
 @cache
 def get_moved_cards(organisation):
     return get_boards(organisation, actions='updateCard:idList')
+
 
 def main(session, *bug_ids):
     client = Client()
