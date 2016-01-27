@@ -96,12 +96,19 @@ def add_comment(session, card, data):
 
 
 def set_status(session, card, data):
+    return
+
     page = convert.get_bugzilla_page(card.bug_id).lower()
     list_name = data['listAfter']['name'].lower()
     knob = None
     resolution = None
     if list_name.startswith('done sprint '):
         status = 'verified fixed'
+        if 'knob-verify' in page:
+            knob = 'verify'
+        elif '<td>resolved</td>' not in page:
+            knob = 'resolve'
+            resolution = 'FIXED'
     elif list_name == 'to do':
         status = 'new'
     elif list_name == 'testing':
@@ -117,13 +124,18 @@ def set_status(session, card, data):
         print 'Unknown list %r, skipping %r' % (list_name, card)
         return
 
+
+    print 'status', status
+    print 'knob', knob
+    print 'list_name', list_name
+
     if not knob:
         return
 
     form = get_form(card)
     post_data = dict(form.form_values())
 
-    if 'knob-reopen' in page:
+    if 'fixed' not in status and 'knob-reopen' in page:
         print 'Reopening %r' % card
         post_data['knob'] = 'reopen'
         post_data['comment'] = settings.BUGZILLA_STATUS_PATTERN.format(
