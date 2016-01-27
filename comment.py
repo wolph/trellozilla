@@ -96,61 +96,85 @@ def add_comment(session, card, data):
 
 
 def set_status(session, card, data):
-    return
-
     page = convert.get_bugzilla_page(card.bug_id).lower()
     list_name = data['listAfter']['name'].lower()
     knob = None
     resolution = None
     if list_name.startswith('done sprint '):
         status = 'verified fixed'
-        if 'knob-verify' in page:
-            knob = 'verify'
-        elif '<td>resolved</td>' not in page:
-            knob = 'resolve'
-            resolution = 'FIXED'
+        # if 'knob-verify' in page:
+        #     knob = 'verify'
+        # elif '<td>resolved</td>' not in page:
+        #     knob = 'resolve'
+        #     resolution = 'FIXED'
     elif list_name == 'to do':
         status = 'new'
     elif list_name == 'testing':
         status = 'resolved fixed'
-        if '<td>resolved</td>' not in page:
-            knob = 'resolve'
-            resolution = 'FIXED'
+        # if '<td>resolved</td>' not in page:
+        #     knob = 'resolve'
+        #     resolution = 'FIXED'
     elif list_name == 'doing':
         status = 'assigned'
-        if '<td>assigned</td>' not in page:
-            knob = 'accept'
+        # if '<td>assigned</td>' not in page:
+        #     knob = 'accept'
     else:
         print 'Unknown list %r, skipping %r' % (list_name, card)
         return
 
+    if 'leave as <b>resolved&nbsp;fixed</b>' in page:
+        current_status = 'resolved fixed'
+    elif 'leave as <b>verified&nbsp;fixed</b>' in page:
+        current_status = 'verified fixed'
+    elif 'leave as <b>new&nbsp;</b>' in page:
+        current_status = 'new'
+    elif 'leave as <b>assigned&nbsp;</b>' in page:
+        current_status = 'assigned'
+    else:
+        print 'Unknown status', card.bug_id, status
+        return
 
-    print 'status', status
-    print 'knob', knob
-    print 'list_name', list_name
-
-    if not knob:
+    if status == current_status:
         return
 
     form = get_form(card)
     post_data = dict(form.form_values())
 
-    if 'fixed' not in status and 'knob-reopen' in page:
-        print 'Reopening %r' % card
-        post_data['knob'] = 'reopen'
-        post_data['comment'] = settings.BUGZILLA_STATUS_PATTERN.format(
-            status='reopened', **data)
-        session.post(settings.BUGZILLA_BUG_POST_URL, data=post_data)
+    # verified fixed resolved fixed
+    if status == 'verified fixed':
+        if 'resolved' not in current_status:
+            post_data['knob'] = 'resolve'
+            post_data['resolution'] = 'fixed'
+            _set_status(session, card, data, post_data, 'resolved fixed')
+            del post_data['resolution']
 
-    post_data['knob'] = knob
+        post_data['knob'] = 'verify'
+        _set_status(session, card, data, post_data, status)
+    elif status == 'resolved fixed':
+        if current_status == 'verified fixed':
+            post_data['knob'] = 'verify'
+            _set_status(session, card, data, post_data, status)
+        else:
+            post_data['knob'] = 'resolve'
+            post_data['resolution'] = 'fixed'
+            _set_status(session, card, data, post_data, status)
+    elif status == 'accepted':
+        post_data['knob'] = 'accept'
+        _set_status(session, card, data, post_data, status)
+    else:
+        print 'status %r unsupported' % status
+
+
+def _set_status(session, card, data, post_data, status):
     post_data['comment'] = settings.BUGZILLA_STATUS_PATTERN.format(
         status=status, **data)
-    if resolution:
-        post_data['resolution'] = resolution
 
-    print 'Changing status for %r to %r (%s)' % (card, status, knob)
+    print 'Changing status for %r to %r' % (card, status)
 
-    convert.cache.expire(('bugzilla_page', card.bug_id))
+    try:
+        convert.cache.expire(('bugzilla_page', card.bug_id))
+    except pyfscache.CacheError:
+        pass
     session.post(settings.BUGZILLA_BUG_POST_URL, data=post_data)
 
 
