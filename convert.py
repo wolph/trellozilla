@@ -192,6 +192,9 @@ def add_comments(card):
                 del comments[k]
 
     for url, comment in sorted(comments.iteritems()):
+        if 'from Trello:' in comment['comment']:
+            continue
+
         formatted_comment = settings.COMMENT_PATTERN % comment
         print 'Adding comment', formatted_comment.split('\n')[0]
         card.comment(formatted_comment)
