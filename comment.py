@@ -91,7 +91,9 @@ def add_comment(session, card, data):
     print 'Found comment: %r' % simple_text
     for text in non_matching:
         print ' - %r' % text
-    session.post(settings.BUGZILLA_BUG_POST_URL, data=post_data)
+    clear_cache(card)
+    if not settings.DRY_RUN:
+        session.post(settings.BUGZILLA_BUG_POST_URL, data=post_data)
     print 'Posting comment to %r: %r' % (card, post_data['comment'])
 
 
@@ -131,7 +133,7 @@ def set_status(session, card, data):
     elif 'leave as <b>assigned&nbsp;</b>' in page:
         current_status = 'assigned'
     else:
-        print 'Unknown status', card.bug_id, status
+        print 'Unknown status', card.bug_id
         return
 
     if status == current_status:
@@ -144,7 +146,7 @@ def set_status(session, card, data):
     if status == 'verified fixed':
         if 'resolved' not in current_status:
             post_data['knob'] = 'resolve'
-            post_data['resolution'] = 'fixed'
+            post_data['resolution'] = 'FIXED'
             _set_status(session, card, data, post_data, 'resolved fixed')
             del post_data['resolution']
 
@@ -156,13 +158,22 @@ def set_status(session, card, data):
             _set_status(session, card, data, post_data, status)
         else:
             post_data['knob'] = 'resolve'
-            post_data['resolution'] = 'fixed'
+            post_data['resolution'] = 'FIXED'
             _set_status(session, card, data, post_data, status)
-    elif status == 'accepted':
+            del post_data['resolution']
+    elif status == 'assigned':
         post_data['knob'] = 'accept'
         _set_status(session, card, data, post_data, status)
     else:
-        print 'status %r unsupported' % status
+        print '%s: status %r unsupported from %r' % (
+            card.bug_id, status, current_status)
+
+
+def clear_cache(card):
+    try:
+        convert.cache.expire(('bugzilla_page', card.bug_id))
+    except pyfscache.CacheError, e:
+        print 'Unable to clear cache for bug %s: %r' % (card.bug_id, e)
 
 
 def _set_status(session, card, data, post_data, status):
@@ -170,12 +181,10 @@ def _set_status(session, card, data, post_data, status):
         status=status, **data)
 
     print 'Changing status for %r to %r' % (card, status)
-
-    try:
-        convert.cache.expire(('bugzilla_page', card.bug_id))
-    except pyfscache.CacheError:
-        pass
-    session.post(settings.BUGZILLA_BUG_POST_URL, data=post_data)
+    clear_cache(card)
+    if not settings.DRY_RUN:
+        response = session.post(settings.BUGZILLA_BUG_POST_URL, data=post_data)
+        print response
 
 
 @cache
