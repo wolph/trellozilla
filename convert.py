@@ -350,7 +350,6 @@ if __name__ == '__main__':
                 elif bug_id and bug_id in archived_bugs \
                         and board.id != settings.ARCHIVE_BOARD:
                     print 'Deleting duplicate card %r (in archive)' % card
-                    print 'Original: %r' % archived_bugs[bug_id]
                     card.delete()
                 else:
                     selected.append(card)
