@@ -341,13 +341,14 @@ if __name__ == '__main__':
             selected = []
             for card in get_cards(board):
                 bug_id = get_bug_id(card)
+                partial = 'deel ' in card.name
                 if board.id == settings.ACTIVE_BOARD:
                     selected.append(card)
-                elif bug_id and bug_id in active_bugs:
+                elif bug_id and bug_id in active_bugs and not partial:
                     print 'Deleting duplicate card %r (in active)' % card
                     print 'Original: %r' % active_bugs[bug_id]
                     card.delete()
-                elif bug_id and bug_id in archived_bugs \
+                elif bug_id and bug_id in archived_bugs and not partial \
                         and board.id != settings.ARCHIVE_BOARD:
                     print 'Deleting duplicate card %r (in archive)' % card
                     card.delete()
