@@ -32,7 +32,9 @@ client = trello.TrelloClient(
     token_secret=settings.TOKEN_SECRET,
 )
 
+
 class MLStripper(HTMLParser.HTMLParser):
+
     def __init__(self):
         self.reset()
         self.fed = []
@@ -54,6 +56,12 @@ def get_bug_id(card):
     match = re.search(r'(\d{4})', card.name)
     if match and 1000 < int(match.group(1)) < 3000:
         return int(match.group(1))
+
+
+def get_partial(card):
+    match = re.search(r'\s*- (deel \d{1}[^\[(]*)', card.name)
+    if match:
+        return match.group(1)
 
 
 def get_estimate(card):
@@ -104,6 +112,11 @@ def get_name(card):
 
         name_parts.append(u'-')
         name_parts.append(name)
+
+        if card.partial:
+            name_parts.append(u'-')
+            name_parts.append(card.partial)
+
         return u' '.join(name_parts)
 
 
@@ -207,6 +220,7 @@ def update_card(card):
         return
 
     card.bug_id = get_bug_id(card)
+    card.partial = get_partial(card)
     card.estimate = get_estimate(card)
     card.time_spent = get_time_spent(card)
     if card.bug_id:
