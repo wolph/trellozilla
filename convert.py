@@ -273,7 +273,7 @@ def get_priority_label(board, priority):
 
 @long_cache
 def list_boards():
-    return client.get_organization('3tu').all_boards()
+    return client.get_organization('4tu').all_boards()
 
 
 def get_board(board_id):
