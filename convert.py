@@ -271,7 +271,7 @@ def get_priority_label(board, priority):
             return label
 
 
-@long_cache
+#@long_cache
 def list_boards():
     return client.get_organization('4tu').all_boards()
 
@@ -307,11 +307,11 @@ if __name__ == '__main__':
     if not sys.argv[1:]:
         for board in list_boards():
             print 'pre-processing %s: %r' % (board.id, board)
-            bugzilla_ids = set(list_bugzilla_bugs(board))
-            bugzilla_ids_per_project[board] = bugzilla_ids
+            # bugzilla_ids = set(list_bugzilla_bugs(board))
+            # bugzilla_ids_per_project[board] = bugzilla_ids
 
-            for card in get_cards(board):
-                all_trello_ids.add(get_bug_id(card))
+            # for card in get_cards(board):
+            #     all_trello_ids.add(get_bug_id(card))
 
         for board, ids in bugzilla_ids_per_project.iteritems():
             ids -= all_trello_ids
@@ -329,15 +329,15 @@ if __name__ == '__main__':
                 print 'Added card for bug %d' % bug_id
                 list_.add_card(str(bug_id))
 
-    active_bugs = set()
+    active_bugs = dict()
     for card in get_cards(get_board(settings.ACTIVE_BOARD)):
         bug_id = get_bug_id(card)
         if bug_id:
-            active_bugs.add(bug_id)
+            active_bugs[bug_id] = card
 
-    archived_bugs = set()
+    archived_bugs = dict()
     for card in get_cards(get_board(settings.ARCHIVE_BOARD)):
-        archived_bugs.add(get_bug_id(card))
+        archived_bugs[get_bug_id(card)] = card
 
     for board in list_boards():
         print 'Processing %r' % board
@@ -369,16 +369,16 @@ if __name__ == '__main__':
                 else:
                     selected.append(card)
 
-        selected = sorted(selected, key=lambda c: c.name)
+        # selected = sorted(selected, key=lambda c: c.name)
 
-        print 'Got %d cards' % len(selected)
+        # print 'Got %d cards' % len(selected)
 
-        if len(selected) == 1:
-            update_card(*selected)
-        else:
-            # pool = multiprocessing.Pool(4)
-            # pool.map(update_card, selected)
-            map(update_card, selected)
+        # if len(selected) == 1:
+        #     update_card(*selected)
+        # else:
+        #     # pool = multiprocessing.Pool(4)
+        #     # pool.map(update_card, selected)
+        #     map(update_card, selected)
 
     utils.save_session(session)
 

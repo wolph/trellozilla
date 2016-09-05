@@ -38,18 +38,38 @@ from convert import list_boards, get_cards, get_bug_id, get_board
 
 if __name__ == '__main__':
     active_bugs = set()
+    print 'Processing active bugs'
     for card in get_cards(get_board(settings.ACTIVE_BOARD)):
         bug_id = get_bug_id(card)
+
         if bug_id in active_bugs:
             print 'Deleting duplicate card %r (in active)' % card
         else:
             active_bugs.add(bug_id)
 
     archived_bugs = set()
-    for card in get_cards(get_board(settings.ARCHIVE_BOARD)):
-        bug_id = get_bug_id(card)
-        if bug_id in active_bugs or bug_id in archived_bugs:
-            print 'Deleting duplicate card %r (in archive)' % card
-            card.delete()
+    # print 'Processing archived bugs'
+    # for card in get_cards(get_board(settings.ARCHIVE_BOARD)):
+    #     bug_id = get_bug_id(card)
 
-        archived_bugs.add(bug_id)
+    #     if bug_id in active_bugs or bug_id in archived_bugs:
+    #         print 'Deleting duplicate card %r (in archive)' % card
+    #         card.delete()
+
+    #     archived_bugs.add(bug_id)
+
+    backlog_bugs = set()
+    for board in list_boards():
+        if board.id in (settings.ARCHIVE_BOARD, settings.ACTIVE_BOARD):
+            print 'Skipping', board
+            continue
+
+        print 'Processing', board
+        for card in get_cards(board):
+            bug_id = get_bug_id(card)
+
+            if bug_id in (active_bugs | archived_bugs | backlog_bugs):
+                print 'Deleting duplicate card %r (in archive)' % card
+                card.delete()
+
+            backlog_bugs.add(bug_id)
